@@ -1,1 +1,8 @@
-
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.biosanc4uary7_create.twa",
+        "sha256_cert_fingerprints": ["EB:0D:E5:3E:99:52:A7:37:21:7A:3C:20:74:A4:38:AF:A2:2E:58:2F:29:F5:07:94:A5:2A:23:90:2A:3E:F4:68"]
+      }
+}]
