@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<link rel="manifest" href="manifest.json">
+<title>BioMap</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@3.3.1/dist/maplibre-gl.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@3.3.1/dist/maplibre-gl.css" rel="stylesheet" />
+<style>
+@import url('https://fonts.cdnfonts.com/css/chalet');
+@font-face { font-family: 'Pricedown'; src: url('https://fonts.cdnfonts.com/s/16045/pricedown bl.woff') format('woff'); }
+body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #82A36B; font-family: 'Chalet', sans-serif; }
+#map { height: 100vh; width: 100vw; background: #82A36B; } 
+#gps-blocker { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(10, 10, 12, 0.98); z-index: 99999; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; text-transform: uppercase; }
+.pulse-ring { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #55aaff; margin-bottom: 20px; animation: pulse 1.5s infinite ease-in-out; }
+@keyframes pulse { 0% { transform: scale(0.8); opacity: 0.5; box-shadow: 0 0 0 0 rgba(85, 170, 255, 0.7); } 70% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 0 15px rgba(85, 170, 255, 0); } 100% { transform: scale(0.8); opacity: 0.5; box-shadow: 0 0 0 0 rgba(85, 170, 255, 0); } }
+#start-gps-btn { background: #2a5a2a; color: #55ff55; border: 2px solid #55ff55; padding: 15px 30px; font-family: 'Pricedown', sans-serif; font-size: 24px; cursor: pointer; text-shadow: 2px 2px 0 #000; box-shadow: 0 0 15px rgba(85, 255, 85, 0.4); border-radius: 8px; margin-top: 15px; }
+#start-gps-btn:active { background: #55ff55; color: #000; text-shadow: none; }
+#f3-panel { position: absolute; top: 0; left: 0; z-index: 10; background: rgba(15, 15, 15, 0.95); color: #ddd; padding: 8px; font-size: 13px; line-height: 1.4; pointer-events: none; text-shadow: 1px 1px 0 #000; border-bottom-right-radius: 4px; border-right: 2px solid #555; border-bottom: 2px solid #555; box-shadow: 3px 3px 0 rgba(0,0,0,0.5); max-width: 95vw; text-transform: uppercase; }
+.highlight { color: #55ff55; }
+.controls { display: flex; gap: 4px; margin-top: 6px; pointer-events: auto; flex-wrap: wrap; }
+.btn { background: rgba(60, 60, 60, 0.9); color: #fff; border: 1px solid #444; padding: 6px; font-family: 'Chalet', sans-serif; font-size: 12px; font-weight: bold; cursor: pointer; flex-grow: 1; text-shadow: 1px 1px 0 #000; text-transform: uppercase; }
+.btn:active { background: #55ff55; color: #000; text-shadow: none; }
+.btn-locked { background: #5555ff !important; border-color: #7777ff !important; }
+.btn-danger { background: #ff4444 !important; border-color: #aa2222 !important; }
+.btn-success { background: #2a5a2a !important; border-color: #44aa44 !important; }
+.btn-warning { background: #884400 !important; border-color: #ff8800 !important; }
+#progress-wrapper { display: none; width: 100%; height: 8px; background: #333; margin-top: 6px; border: 1px solid #555; border-radius: 4px; overflow: hidden; }
+#progress-bar { width: 0%; height: 100%; background: #ffaa00; transition: width 0.3s; }
+#speedometer { position: absolute; top: 350px; left: 10px; z-index: 20; font-size: 38px; color: #fff; -webkit-text-stroke: 1px #000; pointer-events: none; font-weight: bold; display: flex; align-items: baseline; gap: 5px; text-shadow: 2px 2px 0 #000; }
+.speed-unit { font-size: 16px; -webkit-text-stroke: 0.5px #000; font-weight: bold; }
+#route-bottom-info { display: none; position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(15, 15, 15, 0.9); border: 2px solid #55aaff; border-radius: 6px; padding: 8px 25px; z-index: 10; text-align: center; text-transform: uppercase; box-shadow: 0 0 15px rgba(0,0,0,0.8); min-width: 180px; }
+.dialog-box { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 20, 0.95); border: 2px solid #55aaff; padding: 15px; z-index: 100; color: white; font-size: 14px; text-align: center; box-shadow: 0 0 15px rgba(0,0,0,0.8); text-transform: uppercase; width: 250px; }
+.dialog-box .btn { margin-top: 8px; width: 100%; padding: 8px; font-size: 13px; }
+#crosshair { position: absolute; top: 50%; left: 50%; z-index: 20; width: 20px; height: 20px; margin-left: -10px; margin-top: -10px; pointer-events: none; opacity: 0.8; }
+#crosshair::before, #crosshair::after { content: ''; position: absolute; background: white; box-shadow: 0 0 3px black; }
+#crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; }
+#crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }
+.maplibregl-popup { z-index: 9999 !important; }
+.maplibregl-popup-content { background: rgba(20, 20, 20, 0.95); border: 2px solid #55ff55; color: white; font-size: 13px; padding: 8px; border-radius: 0; text-transform: uppercase; min-width: 200px; }
+.maplibregl-popup-tip { border-top-color: #55ff55 !important; }
+.debug-input { background: #222; color: #fff; border: 1px solid #55ff55; padding: 4px; font-size: 12px; outline: none; width: 100%; box-sizing: border-box; margin-top: 4px; font-family: 'Chalet'; }
+</style>
+</head>
+<body>
+<div id="gps-blocker">
+    <div class="pulse-ring"></div>
+    <div style="font-size: 26px; color: #55ff55; text-shadow: 0 0 10px #55aaff;">РАДАР BIOMAP</div>
+    <div id="gps-error-text" style="font-size: 12px; margin-top: 15px; color: #aaa; padding: 0 20px;">НАЖМИТЕ КНОПКУ НИЖЕ ДЛЯ ЗАПУСКА ДВИЖКА<br>И СКАНИРОВАНИЯ СПУТНИКОВ GPS.</div>
+    <button id="start-gps-btn">ВКЛЮЧИТЬ GPS</button>
+</div>
+<div id="f3-panel">
+    <div style="color:#aa55ff; font-weight:bold; font-size:16px;">BIOMAP V3</div>
+    <div id="block-coords">XYZ: 0.000 / 64.000 / 0.000</div>
+    <div id="gps-status" style="font-size:11px; margin-top:4px; color:#aaa;">GPS: ОЖИДАНИЕ...</div>
+    <div id="explore-stats" style="font-size:11px; margin-top:2px; color:#00ffaa;">ИССЛЕДОВАНО: 0.00%</div>
+    <div id="op-status" style="font-size:11px; margin-top:4px; color:#55ff55; font-weight:bold;">ДВИЖОК ГОТОВ.</div>
+    <div id="progress-wrapper"><div id="progress-bar"></div></div>
+    
+    <div class="controls" id="fog-controls" style="display: none;">
+        <button class="btn btn-locked" id="fog-btn" style="flex-grow: 1;">ТУМАН: ВКЛ</button>
+    </div>
+    <div class="controls">
+        <button class="btn btn-warning" id="clear-db-btn" style="flex-grow: 1;">🗑️ ОЧИСТИТЬ БД</button>
+        <button class="btn btn-success" id="export-btn" style="flex-grow: 1; background: #2255ff !important; border-color: #55aaff !important;">ЭКСПОРТ (.JSON)</button>
+    </div>
+    <div class="controls">
+        <button class="btn" id="lock-cam-btn" style="flex-grow: 1;">КАМЕРА: СВОБ</button>
+        <button class="btn" id="center-gps-btn" style="flex-grow: 0; width: 40px; font-size: 16px;">⌖</button>
+    </div>
+    <div class="controls">
+        <button class="btn" id="btn-3d">ВИД: 2D</button>
+        <button class="btn" id="theme-btn">ТЕМА: GTA SA</button>
+        <button class="btn" id="grid-btn">СЕТКА: ВКЛ</button>
+    </div>
+    <div class="controls">
+        <button class="btn" id="debug-btn" style="background: #555;">ОТЛАДКА: ВЫКЛ</button>
+    </div>
+    <div class="controls" id="route-controls" style="display:none;">
+        <button class="btn btn-danger" id="clear-route-btn">СБРОСИТЬ МАРШРУТ</button>
+    </div>
+</div>
+<div id="speedometer">0<span class="speed-unit">КМ/Ч</span></div>
+<div id="route-bottom-info">
+    <div style="font-size: 11px; color: #aaa; margin-bottom: 2px;">ВЕСЬ МАРШРУТ: <span id="route-dist-bottom" style="color:#fff;">0</span> КМ</div>
+    <div id="route-rem-bottom" style="font-size: 16px; color: #ffaa00; font-weight: bold;"></div>
+</div>
+<div id="route-dialog" class="dialog-box">
+    <div style="margin-bottom: 10px; color: #55aaff;">СОЗДАНИЕ МАРШРУТА</div>
+    <div id="route-dialog-text" style="font-size: 12px; margin-bottom: 10px; color: #aaa;"></div>
+    <button class="btn" id="btn-route-gps">ОТ МОЕГО GPS</button>
+    <button class="btn" id="btn-route-cancel" style="background: #444;">ОТМЕНА</button>
+</div>
+<div id="crosshair"></div>
+<div id="map"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const DB_NAME = 'BioMapDB_V3', DB_VERSION = 7, CHUNK_SNAP = 0.0025, ERASE_RADIUS = 150, CHERKASY_TOTAL_CHUNKS = 418000;
+const OVERPASS_ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter", "https://lz4.overpass-api.de/api/interpreter"];
+let db, dbLoaded = false, cachedBuildingIds = new Set(), cachedBuildingFeatures = [], completedChunks = new Set(), customRoadWidths = {};
+let fogPoints = [], fogCanvas, lastErasedPos = null, downloadQueue = [], totalQueueSteps = 0, isDownloading = false, isFogOn = true, isDebugMode = false, currentEndpointIdx = 0;
+let zeroX = 0, zeroZ = 0, mapReady = false, isGTASA = true, isCamLocked = false, is3D = false, isGridOn = true, userLocation = null, targetRoutePoint = null, currentGpsPos = null, targetGpsPos = null, currentHeading = 0, targetHeading = 0, clickPopup = null, firstGpsFix = false;
+const REF_LAT_RAD = 49.4444 * Math.PI / 180, LOCAL_COS = Math.cos(REF_LAT_RAD);
+
+function updateExploreStats() { $('explore-stats').innerText = `ИССЛЕДОВАНО: ${((completedChunks.size / CHERKASY_TOTAL_CHUNKS) * 100).toFixed(3)}%`; }
+
+function initDB() {
+    return new Promise((res, rej) => {
+        let req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = e => {
+            let d = e.target.result;
+            ['buildings', 'chunks', 'fog', 'settings', 'custom_widths'].forEach(n => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); });
+        };
+        req.onsuccess = e => { db = e.target.result; res(); }; req.onerror = e => rej(e.target.error);
+    });
+}
+
+function eraseFogCircle(lng, lat) {
+    if (lastErasedPos && getHaversineDistance(lat, lng, lastErasedPos[1], lastErasedPos[0]) * 1000 < 40) return;
+    lastErasedPos = [lng, lat]; fogPoints.push({ lng, lat });
+    let tx = db.transaction(['fog'], 'readwrite');
+    tx.objectStore('fog').put({ id: `${lng.toFixed(5)}_${lat.toFixed(5)}`, lng: lng, lat: lat });
+    if (mapReady) renderFog();
+}
+
+function loadFromDB() {
+    return new Promise(res => {
+        let tx = db.transaction(['buildings', 'chunks', 'fog', 'settings', 'custom_widths'], 'readonly');
+        tx.objectStore('custom_widths').getAll().onsuccess = e => e.target.result.forEach(r => customRoadWidths[r.id] = r.width);
+        tx.objectStore('buildings').getAll().onsuccess = e => e.target.result.forEach(r => { cachedBuildingIds.add(r.id); cachedBuildingFeatures.push(r.feature); });
+        tx.objectStore('chunks').getAll().onsuccess = e => e.target.result.forEach(r => completedChunks.add(r.id));
+        tx.objectStore('fog').getAll().onsuccess = e => { e.target.result.forEach(r => fogPoints.push({ lng: r.lng, lat: r.lat })); if (mapReady) renderFog(); };
+        tx.objectStore('settings').get('zero_coord').onsuccess = e => { if (e.target.result) { zeroX = e.target.result.x; zeroZ = e.target.result.z; updateCoordsFast(); } };
+        tx.oncomplete = () => { updateExploreStats(); res(); };
+    });
+}
+
+function saveToDB(newBuildings, chunksToSave) {
+    let tx = db.transaction(['buildings', 'chunks'], 'readwrite');
+    let bStore = tx.objectStore('buildings'), cStore = tx.objectStore('chunks');
+    newBuildings.forEach(i => bStore.put(i));
+    chunksToSave.forEach(id => { cStore.put({ id: id }); completedChunks.add(id); });
+    tx.oncomplete = () => updateExploreStats();
+}
+
+function saveZeroCoordsToDB(x, z) { zeroX = x; zeroZ = z; db.transaction(['settings'], 'readwrite').objectStore('settings').put({ id: 'zero_coord', x: x, z: z }).onsuccess = updateCoordsFast; }
+
+function clearDB() {
+    if(!confirm("ВНИМАНИЕ! Вы уверены, что хотите полностью стереть всю карту и туман войны? Это действие необратимо!")) return;
+    if (db) db.close();
+    indexedDB.deleteDatabase(DB_NAME).onsuccess = () => location.reload();
+}
+
+const map = new maplibregl.Map({
+    container: 'map', style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+    center: [32.0597, 49.4444], zoom: 14, pitch: 0, bearing: 0, pitchWithRotate: true, dragPitch: true, dragRotate: true, maxBounds: [[28.5, 47.5], [34.0, 51.0]], minZoom: 5
+});
+map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
+
+function getMeters(lng, lat) { const r = 6378137; return { x: r * (lng * Math.PI / 180) * LOCAL_COS, z: -(r * (lat * Math.PI / 180)) }; }
+function getLatLng(x, z) { const r = 6378137; return [ (x / LOCAL_COS) * 180 / (r * Math.PI), -(z * 180) / (r * Math.PI) ]; }
+function getHaversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function getRoadInfo(tags) {
+    if (tags.width) { let w = parseFloat(tags.width.replace(',', '.')); if (!isNaN(w) && w > 0) return { width: w, isReal: true }; }
+    if (tags['width:carriageway']) { let w = parseFloat(tags['width:carriageway'].replace(',', '.')); if (!isNaN(w) && w > 0) return { width: w, isReal: true }; }
+    if (tags.lanes) { let lanes = parseFloat(tags.lanes); if (!isNaN(lanes) && lanes > 0) return { width: lanes * 3.5, isReal: false }; }
+    let w = 5; if (tags.railway) w = 4; else if (tags.barrier) w = 1; else {
+        switch(tags.highway) { case 'motorway': w = 15; break; case 'trunk': w = 12; break; case 'primary': w = 10; break; case 'secondary': case 'tertiary': w = 8; break; case 'residential': case 'unclassified': w = 6; break; case 'service': case 'pedestrian': w = 4; break; case 'track': w = 3; break; case 'footway': case 'path': case 'cycleway': w = 2; break; }
+    }
+    return { width: w, isReal: false };
+}
+
+function bufferLine(coords, width) {
+    let hw = width / 2, pts = [getMeters(coords[0][0], coords[0][1])];
+    for (let i = 1; i < coords.length; i++) { let m = getMeters(coords[i][0], coords[i][1]); if (Math.hypot(m.x - pts[pts.length - 1].x, m.z - pts[pts.length - 1].z) > 0.01) pts.push(m); }
+    if (pts.length < 2) { let p = pts[0]; return [getLatLng(p.x - hw, p.z - hw), getLatLng(p.x + hw, p.z - hw), getLatLng(p.x + hw, p.z + hw), getLatLng(p.x - hw, p.z + hw), getLatLng(p.x - hw, p.z - hw)]; }
+    let left = [], right = [];
+    for (let i = 0; i < pts.length; i++) {
+        let p = pts[i], pP = i > 0 ? pts[i - 1] : null, pN = i < pts.length - 1 ? pts[i + 1] : null, nx = 0, nz = 0;
+        if (!pP) { let dx = pN.x - p.x, dz = pN.z - p.z, l = Math.hypot(dx, dz); nx = -dz / l; nz = dx / l; }
+        else if (!pN) { let dx = p.x - pP.x, dz = p.z - pP.z, l = Math.hypot(dx, dz); nx = -dz / l; nz = dx / l; }
+        else {
+            let dx1 = p.x - pP.x, dz1 = p.z - pP.z, l1 = Math.hypot(dx1, dz1), n1x = -dz1 / l1, n1z = dx1 / l1;
+            let dx2 = pN.x - p.x, dz2 = pN.z - p.z, l2 = Math.hypot(dx2, dz2), n2x = -dz2 / l2, n2z = dx2 / l2;
+            nx = n1x + n2x; nz = n1z + n2z; let nl = Math.hypot(nx, nz);
+            if (nl < 0.001) { nx = n1x; nz = n1z; } else { nx /= nl; nz /= nl; let dot = n1x * nx + n1z * nz; if (dot > 0.1) { nx /= dot; nz /= dot; } else { nx = n1x; nz = n1z; } }
+        }
+        left.push([p.x + nx * hw, p.z + nz * hw]); right.unshift([p.x - nx * hw, p.z - nz * hw]);
+    }
+    let pPts = left.concat(right); pPts.push(left[0]); return pPts.map(p => getLatLng(p[0], p[1]));
+}
+
+function lerp(start, end, amt) { return (1 - amt) * start + amt * end; }
+function lerpAngle(a, b, t) { let d = b - a; while (d < -180) d += 360; while (d > 180) d -= 360; return a + d * t; }
+function animateGps() {
+    if (targetGpsPos && mapReady) {
+        if (!currentGpsPos) { currentGpsPos = [...targetGpsPos]; currentHeading = targetHeading; }
+        else { currentGpsPos[0] = lerp(currentGpsPos[0], targetGpsPos[0], 0.1); currentGpsPos[1] = lerp(currentGpsPos[1], targetGpsPos[1], 0.1); currentHeading = lerpAngle(currentHeading, targetHeading, 0.1); }
+        if (map.getSource('gps-source')) map.getSource('gps-source').setData({ type: 'Feature', geometry: { type: 'Point', coordinates: currentGpsPos }, properties: { heading: currentHeading } });
+        if (isCamLocked) map.setCenter(currentGpsPos);
+    }
+    requestAnimationFrame(animateGps);
+}
+requestAnimationFrame(animateGps);
+
+function updateCoordsFast() {
+    if (!mapReady) return;
+    const m = getMeters(map.getCenter().lng, map.getCenter().lat), yVal = $('y-val') ? $('y-val').innerText : "64.000";
+    $('block-coords').innerHTML = `<span class="highlight">XYZ:</span> ${(m.x - zeroX).toFixed(3)} / <span id="y-val">${yVal}</span> / ${(m.z - zeroZ).toFixed(3)}`;
+}
+
+async function fetchElevation() {
+    if (!mapReady) return;
+    try { const c = map.getCenter(), res = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${c.lat}&longitude=${c.lng}`); if (res.ok) { const d = await res.json(); if(d.elevation && d.elevation[0]) $('y-val').innerText = (64 + Math.round(d.elevation[0] - 110)) + ".000"; } } catch (e) {}
+}
+
+async function buildCherkasyVoid() {
+    try {
+        const res = await fetch('https://nominatim.openstreetmap.org/search?state=Cherkasy%20Oblast&country=Ukraine&polygon_geojson=1&format=json'), data = await res.json();
+        if (data && data.length > 0 && data[0].geojson) {
+            const geo = data[0].geojson; let mask = [[[-180, -90], [180, -90], [180, 90], [-180, 90], [-180, -90]]];
+            if (geo.type === 'Polygon') mask.push(...geo.coordinates.map(r => [...r].reverse())); else if (geo.type === 'MultiPolygon') geo.coordinates.forEach(p => mask.push([...p[0]].reverse()));
+            if (mapReady && map.getSource('void-mask')) { map.getSource('void-mask').setData({ type: "Feature", geometry: { type: "Polygon", coordinates: mask } }); map.getSource('cherkasy-border').setData(geo); }
+        }
+    } catch(e) {}
+}
+
+function applyTheme() {
+    if (!mapReady || !map.getStyle() || !map.getStyle().layers) return;
+    const skip = ['void-layer', 'border-layer', 'gps-layer', 'highlight-layer', 'chunk-grid', 'block-grid', 'route-layer', 'offline-buildings-layer', 'offline-roads-layer', 'offline-water-layer', 'offline-grass-layer', 'offline-sand-layer', 'offline-buildings-3d-layer'];
+    map.getStyle().layers.forEach(l => {
+        if (skip.includes(l.id.toLowerCase())) return;
+        if (l.type === 'line' || l.type === 'fill' || l.type === 'fill-extrusion') { try { map.setLayerZoomRange(l.id, 1, 24); } catch(e) {} }
+        if (l.type === 'symbol') {
+            if (l.id.toLowerCase().includes('place') && ['city', 'town', 'village', 'hamlet'].some(p => l.id.toLowerCase().includes(p))) {
+                map.setLayoutProperty(l.id, 'visibility', 'visible'); map.setLayoutProperty(l.id, 'text-field', ['coalesce', ['get', 'name_en'], ['get', 'name:en'], ['get', 'name']]);
+                if (map.getPaintProperty(l.id, 'text-color')) map.setPaintProperty(l.id, 'text-color', isGTASA ? '#ffffff' : '#dddddd');
+            } else map.setLayoutProperty(l.id, 'visibility', 'none');
+        }
+    });
+    map.getStyle().layers.forEach(l => {
+        let id = l.id.toLowerCase();
+        if (skip.includes(id)) return;
+        if (id.includes('water') && l.type === 'fill') map.setPaintProperty(l.id, 'fill-color', isGTASA ? '#5A94A7' : '#2b3642');
+        else if ((id.includes('park') || id.includes('landcover') || id.includes('wood') || id.includes('grass')) && l.type === 'fill') map.setPaintProperty(l.id, 'fill-color', isGTASA ? '#6A8B58' : '#141518');
+        else if (id.includes('sand') && l.type === 'fill') map.setPaintProperty(l.id, 'fill-color', isGTASA ? '#D1BE8E' : '#4a402d');
+        else if (id.includes('building') && l.type === 'fill') map.setPaintProperty(l.id, 'fill-color', isGTASA ? '#E4E4E4' : '#292929');
+        else if (l.type === 'line' && (id.includes('road') || id.includes('path') || id.includes('street') || id.includes('highway'))) map.setPaintProperty(l.id, 'line-color', isGTASA ? '#000000' : '#ffffff');
+    });
+    try {
+        if(map.getLayer('background')) map.setPaintProperty('background', 'background-color', isGTASA ? '#82A36B' : '#141518');
+        if(map.getLayer('void-layer')) map.setPaintProperty('void-layer', 'fill-color', isGTASA ? '#4a90e2' : '#2b3642');
+        if(map.getLayer('border-layer')) map.setPaintProperty('border-layer', 'line-color', isGTASA ? '#55ff55' : '#888888');
+        if(map.getLayer('chunk-grid')) map.setPaintProperty('chunk-grid', 'line-color', isGTASA ? '#000000' : '#55ff55');
+        if(map.getLayer('block-grid')) map.setPaintProperty('block-grid', 'line-color', isGTASA ? '#000000' : '#55ff55');
+        if(map.getLayer('offline-buildings-layer')) map.setPaintProperty('offline-buildings-layer', 'fill-color', isGTASA ? '#E4E4E4' : '#292929');
+        if(map.getLayer('offline-buildings-3d-layer')) map.setPaintProperty('offline-buildings-3d-layer', 'fill-extrusion-color', isGTASA ? '#E4E4E4' : '#292929');
+        if(map.getLayer('offline-roads-layer')) map.setPaintProperty('offline-roads-layer', 'fill-color', ['case', ['==', ['get', 'is_railway'], true], isGTASA ? '#5E0B0B' : '#8B0000', ['==', ['get', 'is_dirt'], true], isGTASA ? '#826344' : '#8B5A2B', isGTASA ? '#000000' : '#ffffff']);
+        if(map.getLayer('offline-water-layer')) map.setPaintProperty('offline-water-layer', 'fill-color', isGTASA ? '#5A94A7' : '#2b3642');
+        if(map.getLayer('offline-grass-layer')) map.setPaintProperty('offline-grass-layer', 'fill-color', isGTASA ? '#6A8B58' : '#1a2414');
+        if(map.getLayer('offline-sand-layer')) map.setPaintProperty('offline-sand-layer', 'fill-color', isGTASA ? '#D1BE8E' : '#4a402d');
+    } catch(e) {}
+    renderFog();
+}
+
+function resizeFogCanvas() {
+    if (!fogCanvas || !mapReady) return;
+    const r = map.getContainer().getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    fogCanvas.width = r.width * d; fogCanvas.height = r.height * d; fogCanvas.style.width = r.width + 'px'; fogCanvas.style.height = r.height + 'px'; renderFog();
+}
+
+function renderFog() {
+    if (!fogCanvas || !mapReady) return;
+    const ctx = fogCanvas.getContext('2d'), d = window.devicePixelRatio || 1, w = fogCanvas.width, h = fogCanvas.height;
+    ctx.clearRect(0, 0, w, h); if (!isFogOn) return;
+    ctx.fillStyle = isGTASA ? 'rgba(20, 45, 80, 0.85)' : 'rgba(15, 15, 15, 0.95)'; ctx.fillRect(0, 0, w, h);
+    if (fogPoints.length === 0) return;
+    ctx.globalCompositeOperation = 'destination-out';
+    for (let pt of fogPoints) {
+        let pc = map.project([pt.lng, pt.lat]);
+        if (pc.x < -2000 || pc.x > (w/d + 2000) || pc.y < -2000 || pc.y > (h/d + 2000)) continue;
+        let dLng = ERASE_RADIUS / (111320 * Math.cos(pt.lat * Math.PI / 180)), pe = map.project([pt.lng + dLng, pt.lat]), rPix = Math.hypot(pe.x - pc.x, pe.y - pc.y) * d;
+        if (rPix < 0.5) continue;
+        let grad = ctx.createRadialGradient(pc.x * d, pc.y * d, 0, pc.x * d, pc.y * d, rPix);
+        grad.addColorStop(0, 'rgba(0,0,0,1)'); grad.addColorStop(0.55, 'rgba(0,0,0,1)'); grad.addColorStop(1, 'rgba(0,0,0,0)');    
+        ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(pc.x * d, pc.y * d, rPix, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+}
+
+function updateGrid() {
+    if (!mapReady || !isGridOn) return;
+    const z = map.getZoom(), f = [];
+    if (z >= 15) {
+        const b = map.getBounds(), sw = getMeters(b.getWest(), b.getSouth()), ne = getMeters(b.getEast(), b.getNorth());
+        const sX = Math.floor(sw.x / 16) * 16, eX = Math.ceil(ne.x / 16) * 16, sZ = Math.floor(ne.z / 16) * 16, eZ = Math.ceil(sw.z / 16) * 16;
+        for (let x = sX; x <= eX; x += 16) f.push({ type: 'Feature', properties: { type: 'chunk' }, geometry: { type: 'LineString', coordinates: [getLatLng(x, sZ), getLatLng(x, eZ)] } });
+        for (let z = sZ; z <= eZ; z += 16) f.push({ type: 'Feature', properties: { type: 'chunk' }, geometry: { type: 'LineString', coordinates: [getLatLng(sX, z), getLatLng(eX, z)] } });
+        if (z >= 18.5) {
+            for (let x = sX; x <= eX; x += 1) f.push({ type: 'Feature', properties: { type: 'block' }, geometry: { type: 'LineString', coordinates: [getLatLng(x, sZ), getLatLng(x, eZ)] } });
+            for (let z = sZ; z <= eZ; z += 1) f.push({ type: 'Feature', properties: { type: 'block' }, geometry: { type: 'LineString', coordinates: [getLatLng(sX, z), getLatLng(eX, z)] } });
+        }
+    }
+    if(map.getSource('grid-source')) map.getSource('grid-source').setData({ type: 'FeatureCollection', features: f });
+}
+
+map.on('load', async () => {
+    mapReady = true; 
+    fogCanvas = document.createElement('canvas'); fogCanvas.id = 'fog-canvas'; fogCanvas.style.position = 'absolute'; fogCanvas.style.top = '0'; fogCanvas.style.left = '0'; fogCanvas.style.pointerEvents = 'none'; fogCanvas.style.zIndex = '5'; map.getCanvasContainer().appendChild(fogCanvas);
+    window.addEventListener('resize', resizeFogCanvas); resizeFogCanvas(); map.on('render', renderFog); 
+    map.addSource('custom-buildings', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, tolerance: 0, maxzoom: 24, buffer: 128 });
+    map.addLayer({ 'id': 'offline-grass-layer', 'type': 'fill', 'source': 'custom-buildings', 'filter': ['==', 'type', 'grass'], 'paint': { 'fill-color': '#6A8B58', 'fill-opacity': 1.0 } });
+    map.addLayer({ 'id': 'offline-sand-layer', 'type': 'fill', 'source': 'custom-buildings', 'filter': ['==', 'type', 'sand'], 'paint': { 'fill-color': '#D1BE8E', 'fill-opacity': 1.0 } });
+    map.addLayer({ 'id': 'offline-water-layer', 'type': 'fill', 'source': 'custom-buildings', 'filter': ['==', 'type', 'water'], 'paint': { 'fill-color': '#5A94A7', 'fill-opacity': 1.0 } });
+    map.addLayer({ 'id': 'offline-roads-layer', 'type': 'fill', 'source': 'custom-buildings', 'filter': ['==', 'type', 'road'], 'paint': { 'fill-color': ['case', ['==', ['get', 'is_railway'], true], '#5E0B0B', ['==', ['get', 'is_dirt'], true], '#826344', '#000000'], 'fill-opacity': 1.0 } });
+    map.addLayer({ 'id': 'offline-buildings-layer', 'type': 'fill', 'source': 'custom-buildings', 'filter': ['==', 'type', 'building'], 'paint': { 'fill-color': '#E4E4E4', 'fill-opacity': 1.0 } });
+    map.addLayer({ 'id': 'offline-buildings-3d-layer', 'type': 'fill-extrusion', 'source': 'custom-buildings', 'filter': ['==', 'type', 'building'], 'paint': { 'fill-extrusion-color': '#E4E4E4', 'fill-extrusion-height': 15, 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 1.0 }, 'layout': { 'visibility': 'none' } });
+    map.addSource('void-mask', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({ 'id': 'void-layer', 'type': 'fill', 'source': 'void-mask', 'paint': { 'fill-color': '#4a90e2', 'fill-opacity': 1.0 } });
+    map.addSource('cherkasy-border', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({ 'id': 'border-layer', 'type': 'line', 'source': 'cherkasy-border', 'paint': { 'line-color': '#55ff55', 'line-width': 3, 'line-opacity': 0.8 } });
+    map.addSource('highlight-source', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({ 'id': 'highlight-layer', 'type': 'fill', 'source': 'highlight-source', 'paint': { 'fill-color': '#ffff00', 'fill-opacity': 0.6 } });
+    map.addSource('grid-source', { 'type': 'geojson', 'data': { type: 'FeatureCollection', features: [] } });
+    map.addLayer({ 'id': 'chunk-grid', 'type': 'line', 'source': 'grid-source', 'paint': { 'line-color': '#000000', 'line-width': 2, 'line-opacity': 0.5 }, 'filter': ['==', 'type', 'chunk'] });
+    map.addLayer({ 'id': 'block-grid', 'type': 'line', 'source': 'grid-source', 'paint': { 'line-color': '#000000', 'line-width': 1, 'line-opacity': 0.4 }, 'filter': ['==', 'type', 'block'] });
+    const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48"><path d="M12 2L2 22l10-5 10 5z" fill="#ffffff" stroke="#000000" stroke-width="2"/></svg>`);
+    img.onload = () => {
+        if(!map.hasImage('gta-arrow')) map.addImage('gta-arrow', img);
+        if(!map.getSource('gps-source')) {
+            map.addSource('gps-source', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+            map.addLayer({ 'id': 'gps-layer', 'type': 'symbol', 'source': 'gps-source', 'layout': { 'icon-image': 'gta-arrow', 'icon-rotation-alignment': 'map', 'icon-pitch-alignment': 'map', 'icon-rotate': ['get', 'heading'], 'icon-size': ['interpolate', ['linear'], ['zoom'], 5, 0.15, 10, 0.3, 15, 0.6, 20, 1.2], 'icon-allow-overlap': true, 'icon-ignore-placement': true } });
+        }
+    };
+    map.addSource('route-source', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } } });
+    map.addLayer({ 'id': 'route-layer', 'type': 'line', 'source': 'route-source', 'paint': { 'line-color': '#55aaff', 'line-width': 6, 'line-opacity': 0.8 } });
+    buildCherkasyVoid(); setTimeout(applyTheme, 500); updateCoordsFast(); fetchElevation(); updateGrid();
+    try { await initDB(); await loadFromDB(); dbLoaded = true; map.getSource('custom-buildings').setData({ type: 'FeatureCollection', features: cachedBuildingFeatures }); $('op-status').innerText = `ДВИЖОК ГОТОВ (${cachedBuildingFeatures.length})`; } catch (e) {}
+});
+
+$('start-gps-btn').addEventListener('click', () => {
+    $('start-gps-btn').style.display = 'none'; $('gps-error-text').innerText = "ПОИСК СПУТНИКОВ...";
+    if (!("geolocation" in navigator)) { $('gps-error-text').innerText = "ОШИБКА: НЕТ GPS."; return; }
+    navigator.geolocation.watchPosition(pos => {
+        const c = pos.coords; userLocation = [c.longitude, c.latitude]; targetGpsPos = [...userLocation]; targetHeading = c.heading || 0;
+        $('gps-status').innerText = `GPS: ВКЛ (ТОЧН: ${c.accuracy.toFixed(0)}М)`; $('speedometer').innerHTML = `${c.speed ? Math.round(c.speed * 3.6) : "0"}<span class="speed-unit">КМ/Ч</span>`;
+        if (!firstGpsFix) { firstGpsFix = true; $('gps-blocker').style.display = 'none'; map.flyTo({ center: userLocation, zoom: 16, essential: true }); }
+        if (dbLoaded) { eraseFogCircle(c.longitude, c.latitude); updateVisibility(c.longitude, c.latitude); }
+        if (targetRoutePoint) updateRemainingDistance();
+    }, err => { $('start-gps-btn').style.display = 'block'; $('gps-error-text').innerText = `ОШИБКА GPS: ${err.message.toUpperCase()}`; firstGpsFix = false; }, { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 });
+});
+
+function updateVisibility(lng, lat) {
+    if (lng < 29.0 || lng > 33.5 || lat < 48.0 || lat > 50.5) return;
+    const cX = Math.floor(lng / CHUNK_SNAP), cY = Math.floor(lat / CHUNK_SNAP); let newQ = false;
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+            const sLng = (cX + dx) * CHUNK_SNAP, sLat = (cY + dy) * CHUNK_SNAP, cId = `${sLng.toFixed(5)}_${sLat.toFixed(5)}`;
+            if (!completedChunks.has(cId) && !downloadQueue.some(c => c.id === cId)) { downloadQueue.push({ id: cId, minLng: sLng, minLat: sLat, maxLng: sLng + CHUNK_SNAP, maxLat: sLat + CHUNK_SNAP }); newQ = true; }
+        }
+    }
+    if (newQ) { totalQueueSteps = downloadQueue.length; $('progress-wrapper').style.display = 'block'; if (!isDownloading) processDownloadQueue(); }
+}
+
+async function processDownloadQueue() {
+    if (downloadQueue.length === 0) {
+        isDownloading = false; totalQueueSteps = 0; $('op-status').style.color = '#55ff55'; $('op-status').innerText = `СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА (${cachedBuildingFeatures.length})`; $('progress-wrapper').style.display = 'none';
+        map.getSource('custom-buildings').setData({ type: 'FeatureCollection', features: cachedBuildingFeatures }); return;
+    }
+    isDownloading = true;
+    let p = ((totalQueueSteps - downloadQueue.length) / totalQueueSteps) * 100; if (p < 5) p = 5; $('progress-bar').style.width = `${p}%`;
+    $('op-status').style.color = '#ffaa00'; $('op-status').innerText = `СКАНИРОВАНИЕ...`;
+    let b = []; while(downloadQueue.length > 0 && b.length < 4) b.push(downloadQueue.shift()); 
+    const bbox = `${Math.min(...b.map(c=>c.minLat))},${Math.min(...b.map(c=>c.minLng))},${Math.max(...b.map(c=>c.maxLat))},${Math.max(...b.map(c=>c.maxLng))}`;
+    const q = `[out:json][timeout:25][bbox:${bbox}];(way["building"];relation["building"];way["building:part"];way["highway"];way["natural"];way["landuse"];way["leisure"];way["waterway"];way["railway"];way["barrier"];way["man_made"];way["amenity"="parking"];);out geom;`;
+    try {
+        const res = await fetch(OVERPASS_ENDPOINTS[currentEndpointIdx], { method: 'POST', body: q });
+        if (!res.ok) { if (res.status === 429) throw new Error("429"); currentEndpointIdx = (currentEndpointIdx + 1) % OVERPASS_ENDPOINTS.length; throw new Error(res.status); }
+        const data = await res.json(); let newB = [];
+        data.elements.forEach(el => {
+            if (cachedBuildingIds.has(el.id)) return;
+            let coords = [];
+            if (el.type === 'way' && el.geometry && el.geometry.length > 1) coords = el.geometry.map(g => [g.lon, g.lat]); 
+            else if (el.type === 'relation' && el.members) { let o = el.members.find(m => m.type === 'way' && m.role === 'outer' && m.geometry); if (o) coords = o.geometry.map(g => [g.lon, g.lat]); }
+            if (coords.length > 1) {
+                cachedBuildingIds.add(el.id); let fT = 'unknown'; 
+                if (el.tags.building || el.tags['building:part'] || el.tags.man_made) fT = 'building'; else if (el.tags.highway || el.tags.railway || el.tags.barrier) fT = 'road'; else if (el.tags.natural === 'water' || el.tags.waterway) fT = 'water'; else if (el.tags.natural === 'sand' || el.tags.natural === 'beach') fT = 'sand'; else if (el.tags.landuse === 'grass' || el.tags.landuse === 'forest' || el.tags.leisure === 'park' || el.tags.natural === 'wood' || el.tags.natural === 'scrub') fT = 'grass';
+                if (fT !== 'unknown') {
+                    let isP = false, fC = coords, rI = null, isA = false;
+                    if (['building','water','sand','grass'].includes(fT)) { if (coords.length < 3) return; if (coords[0][0] !== coords[coords.length - 1][0] || coords[0][1] !== coords[coords.length - 1][1]) coords.push(coords[0]); isP = true; fC = [coords]; } 
+                    else if (fT === 'road') {
+                        if (coords.length < 2) return;
+                        if ((el.tags.area === 'yes' || el.tags.area === 'true') && coords.length >= 3 && coords[0][0] === coords[coords.length - 1][0]) { isP = true; fC = [coords]; isA = true; } 
+                        else { rI = getRoadInfo(el.tags); if (customRoadWidths[el.id]) { rI.width = customRoadWidths[el.id]; rI.isReal = true; } fC = [bufferLine(coords, rI.width)]; isP = true; }
+                    }
+                    let props = { type: fT, osmid: el.id };
+                    if (fT === 'road') {
+                        if (el.tags.highway) props.highway = el.tags.highway; if (el.tags.railway) props.is_railway = true; if (el.tags.highway && ['track', 'dirt', 'path', 'unclassified'].includes(el.tags.highway)) props.is_dirt = true;
+                        if (el.tags.width) props.width = el.tags.width; if (el.tags['width:carriageway']) props['width:carriageway'] = el.tags['width:carriageway']; if (el.tags.lanes) props.lanes = el.tags.lanes; if (el.tags.surface) props.surface = el.tags.surface;
+                        if (!rI) rI = getRoadInfo(el.tags); props.computed_width = rI.width; props.is_real_width = rI.isReal; if (customRoadWidths[el.id]) props.is_custom = true; if (!isA) props.centerline = JSON.stringify(coords);
+                    }
+                    let feat = { type: 'Feature', properties: props, geometry: { type: isP ? 'Polygon' : 'LineString', coordinates: fC } };
+                    cachedBuildingFeatures.push(feat); newB.push({ id: el.id, feature: feat });
+                }
+            }
+        });
+        saveToDB(newB, b.map(c => c.id));
+        if (newB.length > 0) { $('op-status').style.color = '#55ff55'; $('op-status').innerText = `+${newB.length} ОБЪЕКТОВ`; }
+        if (map.getSource('custom-buildings')) map.getSource('custom-buildings').setData({ type: 'FeatureCollection', features: cachedBuildingFeatures });
+        setTimeout(processDownloadQueue, 4000); 
+    } catch(err) {
+        b.reverse().forEach(c => downloadQueue.unshift(c)); $('op-status').style.color = '#ff4444';
+        if (err.message === "429") { $('op-status').innerText = `ЛИМИТ (БАН). ЖДЕМ 10 СЕК...`; currentEndpointIdx = (currentEndpointIdx + 1) % OVERPASS_ENDPOINTS.length; setTimeout(processDownloadQueue, 10000); } 
+        else { $('op-status').innerText = `ОШИБКА. СМЕНА ЗЕРКАЛА...`; currentEndpointIdx = (currentEndpointIdx + 1) % OVERPASS_ENDPOINTS.length; setTimeout(processDownloadQueue, 8000); }
+    }
+}
+
+$('debug-btn').addEventListener('click', (e) => {
+    isDebugMode = !isDebugMode; e.target.innerText = isDebugMode ? "ОТЛАДКА: ВКЛ" : "ОТЛАДКА: ВЫКЛ"; e.target.style.background = isDebugMode ? "#aa3333" : "#555";
+    $('fog-controls').style.display = isDebugMode ? 'flex' : 'none';
+    if (!isDebugMode && !isFogOn) { isFogOn = true; $('fog-btn').innerText = "ТУМАН: ВКЛ"; $('fog-btn').classList.add('btn-locked'); renderFog(); }
+    if(clickPopup) clickPopup.remove();
+});
+$('fog-btn').addEventListener('click', (e) => { isFogOn = !isFogOn; e.target.innerText = isFogOn ? "ТУМАН: ВКЛ" : "ТУМАН: ВЫКЛ"; e.target.classList.toggle('btn-locked', isFogOn); renderFog(); });
+map.on('moveend', fetchElevation);
+async function fetchRoute(p1, p2) {
+    try {
+        const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${p1[0]},${p1[1]};${p2[0]},${p2[1]}?overview=full&geometries=geojson`), d = await res.json();
+        if (d.routes && d.routes[0]) { map.getSource('route-source').setData({ type: 'Feature', geometry: d.routes[0].geometry }); $('route-dist-bottom').innerText = (d.routes[0].distance / 1000).toFixed(2); $('route-bottom-info').style.display = 'block'; $('route-controls').style.display = 'flex'; if (userLocation) updateRemainingDistance(); }
+    } catch(e) {}
+}
+function updateRemainingDistance() { if (targetRoutePoint && userLocation) $('route-rem-bottom').innerText = `ОСТАЛОСЬ: ${getHaversineDistance(userLocation[1], userLocation[0], targetRoutePoint[1], targetRoutePoint[0]).toFixed(2)} КМ`; }
+
+map.on('click', (e) => {
+    if (!mapReady || !userLocation) return;
+    const m = getMeters(e.lngLat.lng, e.lngLat.lat), bX = Math.floor(m.x), bZ = Math.floor(m.z);
+    if(map.getSource('highlight-source')) map.getSource('highlight-source').setData({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [[getLatLng(bX, bZ), getLatLng(bX + 1, bZ), getLatLng(bX + 1, bZ + 1), getLatLng(bX, bZ + 1), getLatLng(bX, bZ)]] } });
+    let fts = map.queryRenderedFeatures(e.point, { layers: ['offline-roads-layer', 'offline-buildings-layer', 'offline-water-layer', 'offline-grass-layer', 'offline-sand-layer'] });
+    let h = "", cOsmId = null;
+    if (fts.length > 0) {
+        let p = fts[0].properties; cOsmId = p.osmid; let cItem = cachedBuildingFeatures.find(f => f.properties && f.properties.osmid == cOsmId); if (cItem) p = cItem.properties; 
+        if (isDebugMode) {
+            h = `<div style="font-size:11px; margin-top:5px; border-top:1px solid #55aaff; padding-top:4px;"><b>[ОТЛАДКА] ID: ${cOsmId || '?'}</b><br>Тип: <select id="d-type" class="debug-input"><option value="building" ${p.type==='building'?'selected':''}>Здание</option><option value="road" ${p.type==='road'?'selected':''}>Дорога</option><option value="water" ${p.type==='water'?'selected':''}>Вода</option><option value="sand" ${p.type==='sand'?'selected':''}>Песок</option><option value="grass" ${p.type==='grass'?'selected':''}>Трава/Лес</option></select><br><label style="display:flex;gap:5px;margin-top:4px;"><input type="checkbox" id="d-rail" ${p.is_railway?'checked':''}> Ж/Д</label><label style="display:flex;gap:5px;margin-top:2px;"><input type="checkbox" id="d-dirt" ${p.is_dirt?'checked':''}> Грунт</label>${(p.centerline||p.type==='road')?`<div style="margin-top:4px;">Ширина(м):<input type="number" id="d-width" class="debug-input" value="${p.computed_width||5}" step="0.5" min="1"></div>`:''}<button id="btn-save-d" class="btn btn-success" style="margin-top:8px;width:100%;">СОХРАНИТЬ</button></div>`;
+        } else {
+            let ex = "";
+            if (p.type === 'road') { ex = `<b>Дорога:</b> ${p.highway||'обычная'}<br><b>Ширина:</b> ${p.computed_width||'?'}м ${p.is_custom?'(Вручную)':''}`; if (p.is_railway) ex = `<b>ЖЕЛЕЗНАЯ ДОРОГА</b>`; if (p.is_dirt) ex += `<br><span style="color:#ffaa00;">ГРУНТОВАЯ</span>`; }
+            else if (p.type === 'building') ex = "<b>ЗДАНИЕ</b>"; else if (p.type === 'water') ex = "<b>ВОДА</b>"; else if (p.type === 'sand') ex = "<b>ПЕСОК</b>"; else if (p.type === 'grass') ex = "<b>ТРАВА/ЛЕС</b>";
+            h = `<div style="font-size:11px; color:#55aaff; margin-top:5px; text-transform:none; border-top:1px solid #55aaff; padding-top:4px;"><b>ID:</b> ${cOsmId || '?'}<br>${ex}</div>`;
+        }
+    }
+    if (clickPopup) clickPopup.remove();
+    clickPopup = new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`X: ${Math.floor(m.x - zeroX)} Z: ${Math.floor(m.z - zeroZ)}${h}<br><button id="btn-make-route" class="btn" style="margin-top:6px;width:100%;">МАРШРУТ</button><button id="btn-set-zero" class="btn btn-warning" style="margin-top:6px;width:100%;">СДЕЛАТЬ НУЛЕМ</button>`).addTo(map);
+    $('btn-make-route').onclick = () => { targetRoutePoint = [e.lngLat.lng, e.lngLat.lat]; clickPopup.remove(); $('route-dialog-text').innerText = `ЦЕЛЬ: X: ${Math.floor(m.x - zeroX)} | Z: ${Math.floor(m.z - zeroZ)}`; $('route-dialog').style.display = 'block'; };
+    $('btn-set-zero').onclick = () => { saveZeroCoordsToDB(bX, bZ); clickPopup.remove(); };
+    if (isDebugMode && cOsmId && $('btn-save-d')) {
+        $('btn-save-d').onclick = () => {
+            let idx = cachedBuildingFeatures.findIndex(f => f.properties && f.properties.osmid == cOsmId);
+            if (idx !== -1) {
+                let f = cachedBuildingFeatures[idx]; f.properties.type = $('d-type').value;
+                if ($('d-rail').checked) f.properties.is_railway = true; else delete f.properties.is_railway;
+                if ($('d-dirt').checked) f.properties.is_dirt = true; else delete f.properties.is_dirt;
+                let tx = db.transaction(['buildings', 'custom_widths'], 'readwrite');
+                if ($('d-width') && f.properties.centerline) {
+                    let nw = parseFloat($('d-width').value); if (!isNaN(nw) && nw > 0) { customRoadWidths[cOsmId] = nw; tx.objectStore('custom_widths').put({ id: cOsmId, width: nw }); f.geometry.coordinates = [bufferLine(JSON.parse(f.properties.centerline), nw)]; f.properties.computed_width = nw; f.properties.is_custom = true; }
+                }
+                tx.objectStore('buildings').put({ id: cOsmId, feature: f });
+                tx.oncomplete = () => { map.getSource('custom-buildings').setData({ type: 'FeatureCollection', features: cachedBuildingFeatures }); clickPopup.remove(); };
+            }
+        };
+    }
+});
+
+$('btn-route-gps').onclick = () => { $('route-dialog').style.display = 'none'; if (userLocation) fetchRoute(userLocation, targetRoutePoint); };
+$('btn-route-cancel').onclick = () => $('route-dialog').style.display = 'none';
+map.on('move', () => { updateCoordsFast(); updateGrid(); });
+$('lock-cam-btn').addEventListener('click', (e) => { isCamLocked = !isCamLocked; e.target.innerText = isCamLocked ? "КАМЕРА: СЛЕДИТЬ" : "КАМЕРА: СВОБ"; e.target.classList.toggle('btn-locked', isCamLocked); });
+$('center-gps-btn').addEventListener('click', () => { if(userLocation) map.flyTo({ center: userLocation, zoom: 16 }); });
+$('btn-3d').addEventListener('click', (e) => { is3D = !is3D; e.target.innerText = is3D ? "ВИД: 3D" : "ВИД: 2D"; e.target.classList.toggle('btn-locked', is3D); map.setLayoutProperty('offline-buildings-layer', 'visibility', is3D ? 'none' : 'visible'); map.setLayoutProperty('offline-buildings-3d-layer', 'visibility', is3D ? 'visible' : 'none'); map.easeTo({ pitch: is3D ? 60 : 0 }); });
+$('grid-btn').addEventListener('click', (e) => { isGridOn = !isGridOn; e.target.innerText = isGridOn ? "СЕТКА: ВКЛ" : "СЕТКА: ВЫКЛ"; e.target.classList.toggle('btn-locked', !isGridOn); if(map.getLayer('chunk-grid')) map.setLayoutProperty('chunk-grid', 'visibility', isGridOn ? 'visible' : 'none'); if(map.getLayer('block-grid')) map.setLayoutProperty('block-grid', 'visibility', isGridOn ? 'visible' : 'none'); if(isGridOn) updateGrid(); else if(map.getSource('grid-source')) map.getSource('grid-source').setData({ type: 'FeatureCollection', features: [] }); });
+$('theme-btn').addEventListener('click', (e) => { isGTASA = !isGTASA; e.target.innerText = isGTASA ? "ТЕМА: GTA SA" : "ТЕМА: GTA 5"; applyTheme(); });
+$('clear-route-btn').addEventListener('click', () => { if(map.getSource('route-source')) map.getSource('route-source').setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }); $('route-bottom-info').style.display = 'none'; $('route-controls').style.display = 'none'; targetRoutePoint = null; });
+$('export-btn').addEventListener('click', () => { if (cachedBuildingFeatures.length === 0) return; const b = $('export-btn'); b.innerText = "СОЗДАНИЕ..."; setTimeout(() => { try { const u = URL.createObjectURL(new Blob([JSON.stringify({ type: "FeatureCollection", features: cachedBuildingFeatures })], { type: "application/json" })); const a = document.createElement('a'); a.href = u; a.download = "BioMap_World.geojson"; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(u); } catch (e) {} finally { b.innerText = "ЭКСПОРТ (.JSON)"; } }, 100); });
+</script>
+</body>
+</html>

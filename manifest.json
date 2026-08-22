@@ -1,0 +1,15 @@
+{
+  "name": "BioMap V3",
+  "short_name": "BioMap",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#82A36B",
+  "theme_color": "#141518",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/854/854878.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
